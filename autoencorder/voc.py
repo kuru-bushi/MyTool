@@ -107,3 +107,73 @@ class DataTransform(object):
 
     def __call__(self, img, phase, boxes, labels):
         return self.transform[phase](img, boxes, labels)
+
+
+
+# p106
+
+import torch
+import torch.utils.data as data
+import cv2
+
+# pytorch のでdatasetクラスの継承
+class PreprocessVOC2012(data.Dataset):
+    def __init__(self, img_list, anno_list, phase, transform, get_bbox_label):
+        self.img_list = img_list
+        self.anno_list = anno_list
+        self.phase = phase
+        self.transform = transform
+        self.get_bbox_label = get_bbox_label
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __getitem__(self, index):
+        im, bl, _, _ = self.pull_item(index)
+        return im, bl
+    
+    def pull_item(self, index):
+        img_path = self.img_list[index]
+        img = cv2.imread(img_path)
+        height, width, _ = img.shape
+
+        anno_file_path = self.anno_list[index]
+        bbox_label = self.get_bbox_label(anno_file_path,
+                                         width,
+                                         height)
+
+        img, boxes, labels = self.transform(
+            img,
+            self.phase,
+            bbox_label[:, :4],
+            bbox_label[:, 4]
+        )
+
+        img = torch.from_numpy(
+            img[:, :, (2, 1, 0)]
+        ).permute(2, 0, 1)
+
+        boxlbl = np.hstack(
+            (boxes, np.expand_dims(labels, axis=1))
+        )
+
+        return img, boxlbl, height, width
+# p106
+
+
+# p113
+def multiobject_collate_fn(batch):
+    imgs = []
+    targets = []
+
+    for sample in batch:
+        imgs.append(sample[0])
+        targets.append(torch.FloatTensor(sample[1]))
+
+    imgs = torch.stack(imgs, dim=0)
+
+    return imgs, targets
+# p113
+
+
+    

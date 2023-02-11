@@ -1,8 +1,7 @@
 chainer-gogh-master
 chainer-gogh-main
-__pycache__
-.vscode
 VOCdevkit
 VOC2012/*
-VOCtrainval_11-May-2012.tar
 weights
+Machine-Learning-Collection-master
+
