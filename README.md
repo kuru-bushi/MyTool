@@ -11,4 +11,3 @@
     - NN 
 - deep_learning
 - reinforcement_learning
-

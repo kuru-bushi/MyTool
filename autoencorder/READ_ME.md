@@ -1,0 +1,12 @@
+# nueral transfer
+- 綺麗なコード チュートリアル用
+- https://www.youtube.com/watch?v=g5RECWW-7Wg
+    - VAE の解説をしている
+- style_transfer.ipynb
+    - opencv は使っていない
+    - 正方形と jpg(拡張子が同じでないと動かない？png と jpgだとダメだった)しか読み込めない
+- neural_style.ipynb
+    - opencv も使っているので、少し複雑
+    - 画像のサイズに指定がなく、汎用性の高いコード
+- scratch_nueral_style.ipynb
+    - スクラッチをしている
