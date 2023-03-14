@@ -1,1 +1,16 @@
 .ipynb_checkpoints
+*.tar
+*.pth
+.DS_Store
+__pycache__
+MNIST
+.vscode
+*.gz
+*.xml
+
+# directory
+FashionMNIST
+MNIST
+VOCdevkit
+
+
