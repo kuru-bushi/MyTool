@@ -4,6 +4,7 @@ import time
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F 
 from torch.autograd import Variable
+from torch.utils.data import Dataset
 
 class Dscriminator(torch.nn.Module):
     def __init__(self) -> None:
