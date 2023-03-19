@@ -1,0 +1,11 @@
+- ESRGAN
+    - Enhanced Super-Resolution Generative Adversarial Network
+    - 超解像の分野  画像の解像度を上げることができる
+    - SRGANとの違い
+        - バッチ正規化を除くと生成能力が上がる
+        - DenseBlock を全ての層の出力に足す
+        - DenseBlock を ResNet の要領で3つ連結させる
+    - Real-ESRGAN など種類がある（新しいGAN?）
+    -  参考：ESRGAN https://www.casualganpapers.com/synthetic-data-real-world-blind-super-resolution/Real-ESRGAN-explained.html
+    -  どのような構造かは論文読む。少し複雑で、損失関数がどのように組まれたか、背景にあるモチベーションや課題などは理解していない。
+    - 論文読もう
