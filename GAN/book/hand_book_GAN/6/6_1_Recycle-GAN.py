@@ -13,6 +13,7 @@ import os
 from PIL import Image
 import numpy as np
 import options
+import itertools
 
 opt = options.test_options()
 opt2 = options.test_options()
@@ -386,13 +387,98 @@ if opt.load_weight is True:
     
 
 # 損失関数
+criterion_GAN = torch.nn.MSELoss()
+criterion_recycle = torch.nn.L1Loss()
+criterion_identity = torch.nn.L1Loss()
+criterion_recurrent = torch.nn.L1Loss() # predictor
+
+# Optimizer & LR schedulers
+optimizer_PG = torch.optim.Adam(itertools.chain(netG_A2B.parameters(),
+                                                netG_B2A.parameters(),
+                                                netP_A.parameters(),
+                                                netP_B.parameters(),
+                                                lr=opt.lr,
+                                                betas=(0.5, 0.999)))
+optimizer_D_A = torch.optim.Adam(netD_A.parameters(),
+                                 lr=opt.lr,
+                                 betas=(0.5, 0.999))
+
+optimizer_D_B = torch.optim.Adam(netD_B.parameters(),
+                                 lr=opt.lr,
+                                 betas=(0.5, 0.999))
+
+lr_scheduler_PG = torch.optim.lr_scheduler.LambdaLR(optimizer_PG,
+                                                    lr_lambda=LambdaLR(opt.n_epoch,
+                                                                       opt.start_epoch,
+                                                                       opt.decay_epoch).step)
+lr_scheduler_D_A = torch.optim.lr_scheduler.LambdaLR(optimizer_D_A,
+                                                     lr_lambda=LambdaLR(opt.n_epoch,
+                                                                        opt.start_epoch,
+                                                                        opt.decay_epoch).step)
+lr_scheduler_D_B = torch.optim.lr_scheduler.LambdaLR(optimizer_D_B,
+                                                     lr_lambda=LambdaLR(opt.n_epoch,
+                                                                        opt.start_epoch,
+                                                                        opt.decay_epoch).step)
+
+# 入出力メモリ確保
+Tensor = torch.cuda.FloatTensor if not opt.cpu else torch.Tensor
+input_A1 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+input_A2 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+input_A3 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+input_B1 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+input_B2 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+input_B3 = Tensor(opt.batch_size,
+                  opt.input_nc,
+                  opt.size,
+                  opt.size)
+target_real = Variable(Tensor(opt.batch_size).fill_(1.0),
+                       requires_grad=False)
+
+target_fake = Variable(Tensor(opt.batch_size).fill_(0.0),
+                       requires_grad=False)
 
 
+# 過去データ分のメモリ確保
+fake_A_buffer = ReplayBuffer()
+fake_B_buffer = ReplayBuffer()
+
+# データローダー
+transforms_ = [torchvision.transforms.Resize(int(opt.size*1.12), Image.BICUBIC),
+               torchvision.transforms.RandomCrop(opt.size),
+            #    torchvision.transforms.RandomHorizontalFlip(),
+               torchvision.transforms.ToTensor(),
+               torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+               ]
+
+# dataloader = DataLoader(FaceDatasetSequence(opt.dataroot,
+                # transforms_=transforms_,
+                # unaligned=True,
+                # files_A=opt.file_a_dir,
+                # files_B=opt.file_b_dir,
+                # skip=opt.skip),
+                # batch_size=opt.batch_size,
+                # shuffle=True,
+                # num_workers=opt.n_cpu)
+
+#%% p212
+# for epoch in range(opt.start_epoch, opt.n_epochs):
     
 
-
-
-        
 
     
 
