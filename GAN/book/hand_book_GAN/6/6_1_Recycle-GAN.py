@@ -476,13 +476,291 @@ transforms_ = [torchvision.transforms.Resize(int(opt.size*1.12), Image.BICUBIC),
                 # num_workers=opt.n_cpu)
 
 #%% p212
-# for epoch in range(opt.start_epoch, opt.n_epochs):
+for epoch in range(opt.start_epoch, opt.n_epochs):
+    for i, batch in enumerate(dataloader):
+        # モデルの入力
+        real_A1 = Variable(input_A1.copy_(batch['A1']))
+        real_A2 = Variable(input_A1.copy_(batch['A2']))
+        real_A3 = Variable(input_A1.copy_(batch['A3']))
+
+        real_B1 = Variable(input_A1.copy_(batch['B1']))
+        real_B2 = Variable(input_A1.copy_(batch['B2']))
+        real_B3 = Variable(input_A1.copy_(batch['B3']))
+
+        ### 生成器A2B、B2Aの処理＃＃＃＃
+        optimizer_PG.zero_grad()
+
+        # 同一性損失の計算(Identity loss)
+        # G_A2B(B)は(B)を一致
+        same_B1 = netG_A2B(real_B1)
+        losss_identity_B = criterion_identity(same_B1, real_B1) * 5.0
+        # G_B2A(A)はAと一致
+        same_A1 = netG_B2A(real_A1)
+        losss_identity_A = criterion_identity(same_A1, real_A1)*5.0
+
+        # 敵対性損失(GAN Loss)
+        fake_B1 = netG_A2B(real_A1)
+        pred_fake_B1 = netD_B(fake_B1)
+        loss_GAN_A2B1 = criterion_GAN(pred_fake_B1, target_real)*opt.gan_loss_rate
+
+        fake_B2 = netG_A2B(real_A2)
+        pred_fake_B2 = netD_B(fake_B2)
+        loss_GAN_A2B2 = criterion_GAN(pred_fake_B2, target_real)*opt.gan_loss_rate
+
+        fake_B3 = netG_A2B(real_A3)
+        pred_fake_B3 = netD_B(fake_B3)
+        loss_GAN_A2B3 = criterion_GAN(pred_fake_B3, target_real)*opt.gan_loss_rate
+
+        fake_A1 = netG_A2B(real_B1)
+        pred_fake_A1 = netD_B(fake_A1)
+        loss_GAN_B2A1 = criterion_GAN(pred_fake_A1, target_real)*opt.gan_loss_rate
+
+        fake_A2 = netG_B2A(real_B2)
+        pred_fake_A2 = netD_B(fake_A2)
+        loss_GAN_B2A2 = criterion_GAN(pred_fake_A2, target_real)*opt.gan_loss_rate
+
+        fake_A3 = netG_B2A(real_B3)
+        pred_fake_A3 = netD_B(fake_A3)
+        loss_GAN_B2A3 = criterion_GAN(pred_fake_A3, target_real)*opt.gan_loss_rate
+
+        # サイクル一貫性損失(Cycle-consistency loss)
+        fake_B12 = torch.cat((fake_B1, fake_B2), dim=1)
+        fake_B3_pred = netP_B(fake_B12)
+        recover_A3 = netG_B2A(fake_B3_pred)
+        loss_recycle_ABA = criterion_recycle(recover_A3, real_A3)*opt.gan_loss_rate
+
+        fake_A12 = torch.cat((fake_A1, fake_A2), dim=1)
+        fake_A3_pred = netP_B(fake_A12)
+        recover_B3 = netG_B2A(fake_A3_pred)
+        loss_recycle_BAB = criterion_recycle(recover_B3, real_B3)*opt.gan_loss_rate
+
+        # Recurrent loss
+        real_A12 = torch.cat((real_A1, real_A2), dim=1)
+        pred_A3 = netP_A(real_A12)
+        loss_recurrentA = criterion_recurrent(pred_A3, real_A3)*opt.recu_loss_rate
+
+        real_B12 = torch.cat((real_B1, real_B2), dim=1)
+        pred_B3 = netP_B(real_A12)
+        loss_recurrentB = criterion_recurrent(pred_B3, real_B3)*opt.recu_loss_rate
+
+        # 生成器の合計損失関数
+        loss_PG = losss_identity_A + losss_identity_B + loss_GAN_A2B1 \
+            + loss_GAN_A2B2 + loss_GAN_A2B3 + loss_GAN_B2A1  \
+            + loss_GAN_B2A2 + loss_GAN_B2A3 + loss_recycle_ABA \
+            + loss_recycle_BAB + loss_recurrentA + loss_recurrentB
+        loss_PG.backward()
+        optimizer_PG.step()
+
+        ## ドメインAの識別器 ###
+        optimizer_D_A.zero_grad()
+
+        # ドメインA の本物画像の識別結果(Real loss)
+        pred_real_A1 = netD_A(real_A1)
+        loss_D_real_A1 = criterion_GAN(pred_real_A1, target_real)
+        pred_real_A2 = netD_A(real_A2)
+        loss_D_real_A2 = criterion_GAN(pred_real_A2, target_real)
+        pred_real_A3 = netD_A(pred_real_A3)
+        loss_D_real_A3 = criterion_GAN(pred_real_A3, target_real)
+
+        # ドメインAの生成画像の識別結果(Fake Loss)
+        fake_A1 = fake_A_buffer.push_and_pop(fake_A1)
+        pred_fake_A1 = netD_A(fake_A1.detach())
+        loss_D_fake_A1 = criterion_GAN(pred_fake_A1, target_fake)
+
+        fake_A2 = fake_A_buffer.push_and_pop(fake_A2)
+        pred_fake_A2 = netD_A(fake_A2.detach())
+        loss_D_fake_A2 = criterion_GAN(pred_fake_A2, target_fake)
+
+        fake_A3 = fake_A_buffer.push_and_pop(fake_A3)
+        pred_fake_A3 = netD_A(fake_A3.detach())
+        loss_D_fake_A3 = criterion_GAN(pred_fake_A3, target_fake)
+
+        # 識別器(ドメインA)の合計損失(Total Loss)
+        loss_D_A = (loss_D_real_A1 + loss_D_real_A1 + loss_D_real_A2 + loss_D_real_A3 + loss_D_fake_A1 + loss_D_fake_A2 + loss_D_fake_A3) * 0.5
+        loss_D_A.backward()
+
+        optimizer_D_A.step()
+
+        ### ドメインBの識別器
+        optimizer_D_B.zero_grad()
+
+        # ドメインBの本mの画像の識別結果
+        pred_real_B1 = netD_B(real_B1)
+        loss_D_real_B1 = criterion_GAN(pred_real_B1, target_real)
+        pred_real_B2 = netD_B(real_B2)
+        loss_D_real_B2 = criterion_GAN(pred_real_B2, target_real)
+        pred_real_B3 = netD_B(real_B3)
+        loss_D_real_B3 = criterion_GAN(pred_real_B3, target_real)
+
+        # ドメインBの生成画像の識別結果(Fake Loss)
+        fake_B1 = fake_A_buffer.push_and_pop(fake_B1)
+        pred_fake_B1 = netD_B(fake_B1.detach())
+        loss_D_fake_B1 = criterion_GAN(pred_fake_B1, target_fake)
+
+        fake_B2 = fake_A_buffer.push_and_pop(fake_B2)
+        pred_fake_B2 = netD_B(fake_B2.detach())
+        loss_D_fake_B2 = criterion_GAN(pred_fake_B2, target_fake)
+
+        fake_B3 = fake_A_buffer.push_and_pop(fake_B3)
+        pred_fake_B3 = netD_B(fake_B3.detach())
+        loss_D_fake_B3 = criterion_GAN(pred_fake_B3, target_fake)
+
+        # 識別器（ドメインB）の合計損失(Total Loss)
+        loss_D_B = (loss_D_real_B1 + loss_D_real_B2 + loss_D_real_B3 + loss_D_fake_B1 + loss_D_fake_B2 + loss_D_fake_B3)*0.5
+        loss_D_B.backward()
+
+        optimizer_D_B.step()
+
+#%%p219
+class FaceDatasetVideo(Dataset):
+    def __init__(self, root, transforms_=None, unaligned=False, mode='train', files='fadg0/video/head', skip=2):
+        self.skip = skip
+        self.remove_num = (skip + 1) * 2
+        self.transform = torchvision.transforms.Compose(transforms_)
+        self.unaligned = unaligned
+        all_files = sorted(glob.glob(os.path.join(root, files) + '/*'))
+
+        self.files = all_files[:-self.remove_num]
+
+    def __getitem__(self, index):
+        file = self.files[index % len(self.files)]
+        seed = 1234
+        item_1, item_2, item_3 = self.get_sequential_data(file, seed)
+        return {'1': item_1, '2': item_2, '3': item_3}
+
+    def get_sequential_data(self, file1, seed):
+        dir_name, file_num = file1.rsplit('/', 1)
+        file2 = os.path.join(dir_name, '{:0=3}'.format(int(file_num) + self.skip))
+        file3 = os.path.join(dir_name, '{:0=3}'.format(int(file_num) + self.skip*2))
+
+        np.random.seed(seed)
+        item1 = self.transform(Image.open(file1).convert('RGB'))
+        np.random.seed(seed)
+        item2 = self.transform(Image.open(file2).convert('RGB'))
+        np.random.seed(seed)
+        item3 = self.transform(Image.open(file3).convert('RGB'))
+        return item1, item2, item3
+    
+    def __len__(self):
+        return len(self.files)
+
+#%%220
+# 動画のパラメータを設定
+import cv2
+in_video_w = 256*2
+in_video_h = 256
+fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+
+def make_video(output_video_path, inpu_dir_path, domain, skip=2):
+    video = cv2.VideoWriter(output_vide_path, fourcc, 10.0, (in_video_w, in_video_h))
+
+    # ネットワーク呼び出し
+    netG_A2B = Generator(opt2.input_nc, opt2.output_nc)
+    netG_B2A = Generator(opt2.output_nc, opt2.input_nc)
+
+    # 予測器
+    netP_A = Predictor(opt2.input_nc*2, opt2.output_nc)
+    netP_B = Predictor(opt2.output_nc*2, opt2.input_nc)
+
+    # CUDA
+    if opt2.cuda:
+        netG_A2B.cuda()
+        netG_B2A.cuda()
+        netP_A.cuda()
+        netP_B.cuda()
+
+    # Load state dicts
+    netG_A2B.load_state_dict(torch.load(os.path.join(opt2.model_load_path, 'netG_A2B.pth')))
+    netG_B2A.load_state_dict(torch.load(os.path.join(opt2.model_load_path, 'netG_B2A.pth')))
+    netP_A.load_state_dict(torch.load(os.path.join(opt2.model_load_path, 'netP_A.pth'), map_location="cuda:0"), strict=False)
+    netP_B.load_state_dict(torch.load(os.path.join(opt2.model_load_path, 'netP_B.pth'), map_location="cuda:0"), strict=False)# predictor
+
+    # Set model's test mode
+    netG_A2B.eval()
+    netG_B2A.eval()
+    netP_A.eval()
+    netP_B.eval()
+
+    # Inputs & targets memory allocation
+    Tensor = torch.cuda.FloatTensor if opt2.cuda else torch.Tensor
+    input_A1 = Tensor(opt.batch_size, opt.input_nc, opt.size, opt.size)
+    input_A2 = Tensor(opt.batch_size, opt.input_nc, opt.size, opt.size)
+    input_A3 = Tensor(opt.batch_size, opt.input_nc, opt.size, opt.size)
+
+    input_B1 = Tensor(opt.batch_size, opt.output_nc, opt.size, opt.size)
+    input_B2 = Tensor(opt.batch_size, opt.output_nc, opt.size, opt.size)
+    input_B3 = Tensor(opt.batch_size, opt.output_nc, opt.size, opt.size)
+    
+    # Dataset loader
+    transforms_ = [torchvision.transforms.Resize(int(opt2.size*1.0),
+                                                 Image.BICUBIC),
+                    torchvision.transforms.CenterCrop(opt2.size),
+                    torchvision.transforms.ToTensor(),
+                    torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                   ]
+    dataloader = DataLoader(FaceDatasetVideo(opt2.dataroot, transforms_=transforms_, mode='test', files=input_dir_path, skip=skip),
+                            batch_size=opt2.batch_size,
+                            shuffle=False,
+                            num_workers=opt2.n_cpu)
     
 
+    # 生成器Gによる動画生成
+    for i, batch in enumerate(dataloader):
+        if domain='A':
+            # Set model input
+            real_A1 = Variable(input_A1.copy_(batch['1']))
+            real_A2 = Variable(input_A1.copy_(batch['2']))
+            real_A3 = Variable(input_A1.copy_(batch['3']))
 
-    
+            # Generate output
+            fake_B1 = netG_A2B(real_A1)
+            fake_B2 = netG_A2B(real_A2)
+            fake_B3 = netG_A2B(real_A3)
 
+            fake_B12 = torch.cat((fake_B1, fake_B2), dim=1)
+            fake_B3_pred = netP_B(fake_B12)
 
+            # Calculate the average of fake and pred
+            fake_B3_ave = torch.cat([real_A3, fake_B3_ave], dim=3)
 
+        else:
+            # Set model input
+            real_B1 = Variable(input_B1.copy_(batch['1']))
+            real_B2 = Variable(input_B1.copy_(batch['2']))
+            real_B3 = Variable(input_B1.copy_(batch['3']))
+
+            # Generate output
+            fake_A1 = netG_B2A(real_B1)
+            fake_A2 = netG_B2A(real_B2)
+            fake_A3 = netG_B2A(real_B3)
+
+            fake_A12 = torch.cat((fake_A1, fake_A2), dim=1)
+            fake_A3_pred = netP_A(fake_A12)
+
+            # Calculate the average of fake and pred
+            fake_A3_ave = (fake_A3 + fake_A3_pred) / 2.
+
+            out_img1 = torch.cat([real_B3, fake_A3_ave], dim=3)
+
+        image = 127.5 * (out_img1[0].cpu().float().detach().numpy() + 1.0)
+
+        image = image.transpose(1,2,0).astype(np.unit8)
+        image =cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        video.write(image)
+
+#%% p224
+output_video_path = os.path.join('output/recycle/', opt2.log_base_name, 'output_video/A2B/head.mp4')
+input_dir_path = 'fadg0/video/head'
+domin = 'A'
+make_video(output_vide_path, input_dir_path, domain=domain)
+
+#%% p225
+from mtcnn import MTCNN
+import cv2
+
+img = cv2.cvtColor(cv2.imread('ivan.jpg'), cv2.COLOR_BGR2RGB)
+detector = MTCNN()
+detector.detect_faces(img)
+            
 
 
