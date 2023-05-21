@@ -4,15 +4,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 #%%
-origin_path = "./ro1.jpg"
-ex_path = "./ro2.jpg"
+# feature matching する 2 画像の表示
+origin_path = "./imgs/ro1.jpg"
+ex_path = "./imgs/ro2.jpg"
 
 img = cv.imread(origin_path)
 ex_img = cv.imread(ex_path)
 
-plt.imshow(img)
-#%%
-plt.imshow(ex_img)
+fig, axes = plt.subplots(1,2)
+
+axes[0].imshow(img)
+axes[0].set_title(origin_path)
+
+axes[1].imshow(ex_img)
+axes[1].set_title(ex_path)
+plt.show()
+
 #%%
 # resize
 width, height, _ = img.shape
@@ -31,9 +38,12 @@ kp1, desc1 = SIFT(img)
 kp2, desc2 = SIFT(ex_img)
 
 # %%
+# 総当たり matching
 bf = cv.BFMatcher()
-select_match_type = "match" # knn, match
-select_filter = True
+
+# option の選択
+select_match_type = "knn" # knn, match
+select_filter = True # True, False
 
 def get_good_match(matches, filter=True, thredhold=0.7):
     if filter:
@@ -48,30 +58,36 @@ def get_good_match(matches, filter=True, thredhold=0.7):
 
 #%%
 if select_match_type == "match":
+    # matching
     matches = bf.match(desc1, desc2)
-    # 
+
     good_match = matches
 
+    # distance の近い点で並び替え
     good_match = sorted(good_match, key = lambda x: x.distance)
 
+    # key point と画像の表示
     img_pair = cv.drawMatches(img, kp1, ex_img, kp2, good_match[:10], None, flags=2)
+
     print(len(good_match))
 
 elif select_match_type == "knn":
+    # matching
     matches = bf.knnMatch(desc1, desc2, k=2)
 
+    # .distance から key point が一致しないと filter
     good_match = get_good_match(matches, filter=select_filter)
 
+    # distance の近い点で並び替え
     good_match = sorted(good_match, key = lambda x: x[0].distance)
+    
+    # key point と画像の表示
     img_pair = cv.drawMatchesKnn(img, kp1, ex_img, kp2, good_match[:10], None, flags=2)
+
     print(len(good_match))
 
+# draw matches の表示
 plt.imshow(img_pair)
-#%%
-# test
-# mat0, mat1 = matches[2]
-# print(mat0.imgIdx, mat0.trainIdx, mat0.queryIdx)
-# print(mat1.imgIdx, mat1.trainIdx, mat1.queryIdx)
 
 # %%
 print(kp1[0].pt)
