@@ -16,3 +16,5 @@
     - https://towardsdatascience.com/understanding-homography-a-k-a-perspective-transformation-cacaed5ca17
 - camera calibrate
     - https://medium.com/analytics-vidhya/camera-calibration-with-opencv-f324679c6eb7
+- scipy optimize homgraphy
+    - https://stackoverflow.com/questions/59716590/euclidean-homography-optimization-python
